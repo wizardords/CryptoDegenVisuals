@@ -1,0 +1,51 @@
+import pandas as pd
+import numpy as np
+import tensorflow as tf
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import MinMaxScaler
+from tensorflow.keras import Sequential
+from tensorflow.keras.layers import LSTM, Dense, Dropout
+
+# Load the data
+data = pd.read_csv("bitcoin_prices.csv")
+
+# Normalize the price data
+scaler = MinMaxScaler()
+data['scaled_price'] = scaler.fit_transform(data[['price']])
+
+# Prepare data for time series (windowed data)
+def create_dataset(dataset, look_back=1):
+    dataX, dataY = [], []
+    for i in range(len(dataset) - look_back):
+        a = dataset[i:(i + look_back)]
+        dataX.append(a)
+        dataY.append(dataset[i + look_back])
+    return np.array(dataX), np.array(dataY)
+
+look_back = 10  # The size of the time window
+X, Y = create_dataset(data['scaled_price'], look_back)
+
+# Split the data into training and testing sets
+X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.2, random_state=42)
+
+# Reshape input to [samples, time steps, features]
+X_train = X_train.reshape((X_train.shape[0], X_train.shape[1], 1))
+X_test = X_test.reshape((X_test.shape[0], X_test.shape[1], 1))
+
+# Build a simple LSTM model
+model = Sequential([
+    LSTM(50, input_shape=(look_back, 1)),
+    Dropout(0.2),
+    Dense(1)
+])
+
+model.compile(loss='mean_squared_error', optimizer='adam')
+
+# Train the model
+model.fit(X_train, Y_train, epochs=20, batch_size=32, validation_data=(X_test, Y_test))
+
+# Save the model and scaler for future use
+model.save("crypto_price_model.h5")
+tf.saved_model.save(model, "crypto_price_model")
+
+print("Model training complete and saved.")
